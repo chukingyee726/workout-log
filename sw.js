@@ -1,5 +1,5 @@
 // 运动记录 离线缓存
-var CACHE = "yundong-jilu-v6";
+var CACHE = "yundong-jilu-v7";
 var FILES = ["./", "./index.html"];
 
 self.addEventListener("install", function (e) {
