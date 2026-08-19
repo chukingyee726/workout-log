@@ -277,7 +277,12 @@
   .kcalRow{display:flex;align-items:center;gap:8px;margin-top:9px;flex-wrap:wrap}
   .kcalRow input[type=number]{width:104px}
   .kcalRow .unit{font-size:14px;color:var(--ink-3)}
-  .kcalRow .guess{font-size:12px;color:var(--ink-3);flex:1;min-width:120px;line-height:1.35}
+  .guess{font-size:12px;color:var(--ink-3);line-height:1.5;margin-top:7px}
+  .ghost.ai{
+    border-color:var(--warm);color:var(--warm);font-weight:600;white-space:nowrap;
+    padding:9px 14px;
+  }
+  .ghost.ai:disabled{opacity:.5}
 
   .mealrow{
     background:var(--card);border:1px solid var(--line);border-radius:12px;
@@ -455,8 +460,9 @@
       <div class="kcalRow">
         <input type="number" id="mealKcal" inputmode="numeric" placeholder="—" min="0" max="9000">
         <span class="unit">大卡</span>
-        <span class="guess" id="mealGuess">估的，可以改</span>
+        <button class="ghost ai" id="mealAI" type="button">让 Claude 估</button>
       </div>
+      <div class="guess" id="mealGuess">估的，可以改</div>
       <button class="save warm" id="mealSave" type="button">记下来</button>
     </div>
 
@@ -466,8 +472,22 @@
 
     <div id="foodList"></div>
 
+    <div class="card">
+      <p class="label">Claude 估算 <span class="hint" id="keyState"></span></p>
+      <input type="password" id="apiKey" placeholder="粘贴你的 API key（sk-ant-…）" autocomplete="off" spellcheck="false">
+      <div class="prow" style="justify-content:flex-start;margin-top:9px">
+        <button class="ghost" id="keySave" type="button">保存</button>
+        <button class="ghost" id="keyTest" type="button">测一下</button>
+        <button class="ghost" id="keyClear" type="button">清除</button>
+      </div>
+      <div class="guess" style="margin-top:9px">
+        key 只存在这台手机的浏览器里，不会进代码库，也不会发给我以外的地方。
+        每次估算大概 0.1 美分。没设置的话，App 还是用内置food表估。
+      </div>
+    </div>
+
     <div class="foot">
-      照片只存在这台手机上，没有上传到任何地方<br>
+      照片只存在这台手机上，估算时才会发给 Claude<br>
       <span id="usage"></span>
     </div>
   </section>
@@ -493,8 +513,9 @@
   <div class="kcalRow">
     <input type="number" id="vKcal" inputmode="numeric" placeholder="—" min="0" max="9000">
     <span class="unit">大卡</span>
-    <span class="guess" id="vGuess"></span>
+    <button class="ghost ai" id="vAI" type="button">让 Claude 看照片估</button>
   </div>
+  <div class="guess" id="vGuess"></div>
   <div class="drow">
     <button class="ghost" id="vSave" type="button">保存</button>
   </div>
@@ -1351,6 +1372,91 @@
     document.body.removeChild(ta);
   }
 
+  /* ---------- Claude 估算 ---------- */
+
+  var AI_KEY = "yundong-ai-key";
+  var AI_SYSTEM = "你是营养估算助手。根据用户给的文字描述或食物照片，估算这一餐的总热量（大卡）。"
+    + "没写份量就按一人份、常见做法估。宁可给一个合理的中间值，也不要拒绝回答。"
+    + "只输出 JSON，格式 {\"kcal\": 整数, \"note\": \"30 字以内的中文说明，写清楚你假设了什么份量\"}，不要输出别的内容。";
+
+  function getKey(){
+    try{ return localStorage.getItem(AI_KEY) || ""; }catch(e){ return ""; }
+  }
+  function setKey(v){
+    try{ v ? localStorage.setItem(AI_KEY, v) : localStorage.removeItem(AI_KEY); }catch(e){}
+    renderKeyState();
+  }
+  function renderKeyState(){
+    var has = !!getKey();
+    $("keyState").textContent = has ? "已设置" : "还没设置";
+    $("mealAI").disabled = !has;
+    $("vAI").disabled = !has;
+  }
+
+  function askClaude(content, cb){
+    var key = getKey();
+    if(!key) return cb(null, "还没设置 API key");
+    fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": key,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5",
+        max_tokens: 300,
+        system: AI_SYSTEM,
+        messages: [{ role: "user", content: content }]
+      })
+    }).then(function(r){
+      if(r.status === 401) throw new Error("key 不对");
+      if(r.status === 400) throw new Error("请求被拒，检查 key 有没有充值");
+      if(r.status === 429) throw new Error("太频繁了，等几秒再试");
+      if(!r.ok) throw new Error("出错了（" + r.status + "）");
+      return r.json();
+    }).then(function(j){
+      var txt = (j.content || []).map(function(b){ return b.text || ""; }).join("");
+      var m = txt.match(/\{[\s\S]*\}/);
+      if(!m) throw new Error("返回看不懂");
+      var o = JSON.parse(m[0]);
+      var k = Math.round(Number(o.kcal) || 0);
+      if(!(k > 0)) throw new Error("没估出来");
+      cb({ kcal: k, note: String(o.note || "") }, null);
+    }).catch(function(e){
+      cb(null, e && e.message ? e.message : "请求失败");
+    });
+  }
+
+  function blobToB64(blob){
+    return new Promise(function(res, rej){
+      var fr = new FileReader();
+      fr.onload = function(){ res(String(fr.result).split(",")[1]); };
+      fr.onerror = rej;
+      fr.readAsDataURL(blob);
+    });
+  }
+
+  function runAI(btn, label, content, kcalEl, guessEl){
+    btn.disabled = true;
+    var old = btn.textContent;
+    btn.textContent = "估算中…";
+    guessEl.textContent = "Claude 正在看…";
+    askClaude(content, function(res, err){
+      btn.disabled = false;
+      btn.textContent = old;
+      if(err){
+        guessEl.textContent = "估算失败：" + err;
+        toast(err);
+        return;
+      }
+      kcalEl.value = res.kcal;
+      kcalEl.dataset.touched = "1";
+      guessEl.textContent = "Claude：约 " + res.kcal + " 大卡" + (res.note ? "，" + res.note : "") + "。可以改";
+    });
+  }
+
   /* ---------- 吃的：拍照与存储 ---------- */
 
   function shrink(file){
@@ -1771,6 +1877,57 @@
       });
     });
 
+    $("mealAI").addEventListener("click", function(){
+      var t = $("mealText").value.trim();
+      if(!t) return toast("先写一下吃了什么");
+      runAI(this, "让 Claude 估",
+        [{ type:"text", text:"我" + (meal || mealByHour()) + "吃了：" + t }],
+        $("mealKcal"), $("mealGuess"));
+    });
+
+    $("vAI").addEventListener("click", function(){
+      if(!viewing) return;
+      var btn = this;
+      var desc = $("vText").value.trim();
+      btn.disabled = true;
+      var old = btn.textContent;
+      btn.textContent = "读照片…";
+      blobToB64(viewing.blob).then(function(b64){
+        btn.disabled = false;
+        btn.textContent = old;
+        runAI(btn, old, [
+          { type:"image", source:{ type:"base64", media_type:"image/jpeg", data:b64 } },
+          { type:"text", text:"这是我" + viewing.meal + "的照片。" + (desc ? "补充：" + desc + "。" : "") + "估算这一餐的总热量。" }
+        ], $("vKcal"), $("vGuess"));
+      }).catch(function(){
+        btn.disabled = false;
+        btn.textContent = old;
+        toast("读不出照片");
+      });
+    });
+
+    $("keySave").addEventListener("click", function(){
+      var v = $("apiKey").value.trim();
+      if(!v) return toast("先粘贴 key");
+      setKey(v);
+      $("apiKey").value = "";
+      toast("已保存到这台手机");
+    });
+    $("keyClear").addEventListener("click", function(){
+      setKey("");
+      $("apiKey").value = "";
+      toast("已清除");
+    });
+    $("keyTest").addEventListener("click", function(){
+      var btn = this;
+      if(!getKey()) return toast("还没设置 key");
+      btn.disabled = true; btn.textContent = "测试中…";
+      askClaude([{ type:"text", text:"我吃了一个苹果" }], function(res, err){
+        btn.disabled = false; btn.textContent = "测一下";
+        toast(err ? ("不通：" + err) : ("通了，苹果它估 " + res.kcal + " 大卡"));
+      });
+    });
+
     $("vText").addEventListener("input", function(){
       var res = estimate(this.value.trim());
       $("vGuess").textContent = this.value.trim() ? guessText(res) : "";
@@ -1826,6 +1983,7 @@
     refreshSave();
     renderPlan();
     renderFood();
+    renderKeyState();
     switchTab("plan");
     refreshPhotos().catch(function(){ toast("这个浏览器不支持存照片"); });
   }
