@@ -236,6 +236,44 @@
   }
   #banner.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
 
+  .planTop{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:12px}
+  .pkicker{font-size:12px;color:var(--ink-3);letter-spacing:1px}
+  .ptitle{font-size:22px;font-weight:700;letter-spacing:.5px;margin-top:2px}
+  .ptitle input{font-size:20px;font-weight:700;margin-top:2px}
+  .pmeta{font-size:13px;color:var(--ink-2);margin-top:3px}
+  .pitem{
+    display:flex;gap:10px;align-items:flex-start;
+    padding:10px 2px;border-top:1px solid var(--line);cursor:pointer;
+  }
+  .pitem:first-child{border-top:none}
+  .pbox{
+    width:20px;height:20px;border-radius:6px;border:1.5px solid var(--line);
+    flex:none;margin-top:1px;position:relative;background:#fbfaf8;
+  }
+  .pitem.done .pbox{background:var(--accent);border-color:var(--accent)}
+  .pitem.done .pbox::after{
+    content:"";position:absolute;left:6px;top:2px;width:5px;height:10px;
+    border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg);
+  }
+  .pitem .ptext{flex:1;font-size:15px;line-height:1.45;word-break:break-word}
+  .pitem.done .ptext{color:var(--ink-3);text-decoration:line-through}
+  .pitem input[type=text]{font-size:15px;padding:8px 10px;min-height:38px}
+  .prow{display:flex;gap:8px;justify-content:center;margin-top:12px}
+  .cyc{
+    background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:11px 12px;margin-bottom:8px;display:flex;gap:10px;align-items:center;cursor:pointer;
+  }
+  .cyc.on{border-color:var(--accent);background:var(--accent-soft)}
+  .cyc .n{
+    width:22px;height:22px;border-radius:50%;background:#ece8e2;color:var(--ink-2);
+    font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none;
+  }
+  .cyc.on .n{background:var(--accent);color:#fff}
+  .cyc .cname{font-size:15px;font-weight:600}
+  .cyc .cmeta{font-size:12px;color:var(--ink-3);margin-left:auto;white-space:nowrap}
+  .why{font-size:13px;color:var(--ink-2);line-height:1.7}
+  .why b{color:var(--ink);font-weight:650}
+
   .kcalRow{display:flex;align-items:center;gap:8px;margin-top:9px;flex-wrap:wrap}
   .kcalRow input[type=number]{width:104px}
   .kcalRow .unit{font-size:14px;color:var(--ink-3)}
@@ -286,12 +324,48 @@
   </header>
 
   <div class="tabs">
-    <button class="tab on" data-tab="move" type="button">运动</button>
+    <button class="tab on" data-tab="plan" type="button">计划</button>
+    <button class="tab" data-tab="move" type="button">运动</button>
     <button class="tab" data-tab="food" type="button">吃的</button>
   </div>
 
+  <!-- 计划 -->
+  <section id="pane-plan">
+    <div class="card">
+      <div class="planTop">
+        <div class="pheadtext">
+          <div class="pkicker" id="planKicker">这次练</div>
+          <div class="ptitle" id="planName"></div>
+          <div class="pmeta" id="planMeta"></div>
+        </div>
+        <button class="ghost" id="planEdit" type="button">编辑</button>
+      </div>
+      <div id="planItems"></div>
+      <div id="planAddWrap" class="hidden">
+        <button class="ghost" id="planAdd" type="button">+ 加一个动作</button>
+      </div>
+      <button class="save" id="planDone" type="button">做完了，记一笔</button>
+      <div class="prow">
+        <button class="ghost" id="planPrev" type="button">上一项</button>
+        <button class="ghost" id="planSkip" type="button">跳过这项</button>
+      </div>
+    </div>
+
+    <div class="listhead"><h2>整个循环</h2></div>
+    <div id="planList"></div>
+
+    <div class="card">
+      <p class="label">为什么这么排</p>
+      <div class="why" id="planWhy"></div>
+    </div>
+
+    <div class="foot">
+      <button id="planReset" type="button">恢复推荐计划</button>
+    </div>
+  </section>
+
   <!-- 运动 -->
-  <section id="pane-move">
+  <section id="pane-move" class="hidden">
     <div class="card goal" id="goalCard">
       <div class="goalTop">
         <span class="glabel">这周目标</span>
@@ -490,6 +564,188 @@
   }
   function persistMeals(){
     try{ localStorage.setItem(MEAL_KEY, JSON.stringify(meals)); }catch(e){}
+  }
+
+  /* ---------- 训练计划 ---------- */
+
+  var PLAN_KEY = "yundong-plan";
+  var plan = null;
+  var planEditing = false;
+  var planPending = null;
+
+  function defaultPlan(){
+    var raw = [
+      { name:"腿臀 A · 力量", act:"健身房", tag:"腿", mins:55, items:[
+        "热身：单车或快走 5 分钟 + 臀桥 2×15",
+        "杠铃臀推 4×8-10（最后两下要有点吃力）",
+        "高脚杯深蹲 4×10",
+        "罗马尼亚硬拉 3×10（重点感受大腿后侧拉伸）",
+        "坐姿腿弯举 3×12",
+        "髋外展机或弹力带 3×15",
+        "平板支撑 3×40 秒"
+      ]},
+      { name:"体能 · Tone House 或跑", act:"Tone House", tag:"全身", mins:50, items:[
+        "有课就照课上的来，不用看这张单子",
+        "没课：跑 30-40 分钟，能说话的强度",
+        "想练狠一点：400 米 ×6，每组之间走 90 秒",
+        "结束拉伸 5 分钟"
+      ]},
+      { name:"上身 + 核心", act:"健身房", tag:"背", mins:45, items:[
+        "热身：划船机 5 分钟",
+        "高位下拉 4×10",
+        "哑铃卧推或俯卧撑 3×10",
+        "坐姿划船 3×12",
+        "侧平举 3×12",
+        "死虫 3×12（每侧）",
+        "侧平板 3×30 秒（每侧）",
+        "屈膝抬腿 3×10"
+      ]},
+      { name:"腿臀 B · 单腿", act:"健身房", tag:"腿", mins:50, items:[
+        "热身：弹力带侧向走 2×15 步",
+        "保加利亚分腿蹲 4×10（每腿）",
+        "单腿硬拉 3×10（每腿）",
+        "臀推 3×15（轻一点，多做几下）",
+        "后撤步弓步 3×12（每腿）",
+        "提踵 3×15",
+        "卷腹 3×20 + 俄罗斯转体 3×20"
+      ]},
+      { name:"自由日", act:"网球", tag:"全身", mins:60, items:[
+        "网球、游泳、轻松长跑，挑当天想做的",
+        "目的是保持活动量和心情，不用拼强度",
+        "结束拉伸 10 分钟：股四头、大腿后侧、髋屈肌、胸椎"
+      ]}
+    ];
+    return {
+      v: 1,
+      idx: 0,
+      cycle: raw.map(function(s, i){
+        return {
+          id: "s" + i,
+          name: s.name, act: s.act, tag: s.tag, mins: s.mins,
+          items: s.items.map(function(t, j){ return { id: "s" + i + "i" + j, t: t, d: false }; })
+        };
+      })
+    };
+  }
+
+  var PLAN_WHY = "你的目标是减脂塑形，重点大腿和腹部。有件事先说清楚：<b>脂肪掉在哪儿是身体自己决定的</b>，没有哪个动作能只减大腿或只减肚子。能控制的是两件事，整体上吃得比消耗少一点，以及把臀腿和核心练得更结实，这样围度和线条才会变。<br><br>所以循环里 <b>腿臀一轮练两次</b>（一次双腿发力的重量，一次单腿和臀中肌），<b>核心一轮三次</b>，上身一次是为了体态和整体平衡，体能课和自由日负责心肺和消耗。<br><br>重量的判断标准：按写的次数做完，最后一两下明显吃力但动作不变形。下一轮同一个动作能轻松多做两下，就加一点重量。备注里记一下用了多少，下次不用猜。";
+
+  function loadPlan(){
+    try{
+      var raw = localStorage.getItem(PLAN_KEY);
+      plan = raw ? JSON.parse(raw) : null;
+      if(!plan || !Array.isArray(plan.cycle) || !plan.cycle.length) plan = defaultPlan();
+    }catch(e){ plan = defaultPlan(); }
+    if(!(plan.idx >= 0 && plan.idx < plan.cycle.length)) plan.idx = 0;
+  }
+  function persistPlan(){
+    try{ localStorage.setItem(PLAN_KEY, JSON.stringify(plan)); }catch(e){}
+  }
+  function currentSession(){ return plan.cycle[plan.idx]; }
+
+  function renderPlan(){
+    var s = currentSession();
+    var nameEl = $("planName");
+    nameEl.innerHTML = "";
+
+    if(planEditing){
+      var ni = document.createElement("input");
+      ni.type = "text"; ni.value = s.name; ni.maxLength = 30;
+      ni.addEventListener("input", function(){ s.name = ni.value; persistPlan(); });
+      nameEl.appendChild(ni);
+    }else{
+      nameEl.textContent = s.name;
+    }
+
+    var done = s.items.filter(function(i){ return i.d; }).length;
+    $("planMeta").textContent = s.act + " · " + s.tag + " · 约 " + s.mins + " 分钟"
+      + (done ? "  ·  已勾 " + done + "/" + s.items.length : "");
+    $("planKicker").textContent = "这次练（第 " + (plan.idx + 1) + " / " + plan.cycle.length + " 项）";
+    $("planEdit").textContent = planEditing ? "完成" : "编辑";
+    $("planAddWrap").classList.toggle("hidden", !planEditing);
+
+    var wrap = $("planItems");
+    wrap.innerHTML = "";
+    s.items.forEach(function(it){
+      var row = document.createElement("div");
+      row.className = "pitem" + (it.d && !planEditing ? " done" : "");
+
+      if(planEditing){
+        var inp = document.createElement("input");
+        inp.type = "text"; inp.value = it.t; inp.maxLength = 80;
+        inp.addEventListener("input", function(){ it.t = inp.value; persistPlan(); });
+        var del = document.createElement("button");
+        del.className = "del"; del.type = "button"; del.textContent = "×";
+        del.addEventListener("click", function(){
+          s.items = s.items.filter(function(x){ return x.id !== it.id; });
+          persistPlan(); renderPlan();
+        });
+        row.appendChild(inp);
+        row.appendChild(del);
+      }else{
+        var box = document.createElement("div");
+        box.className = "pbox";
+        var txt = document.createElement("div");
+        txt.className = "ptext";
+        txt.textContent = it.t;
+        row.appendChild(box);
+        row.appendChild(txt);
+        row.addEventListener("click", function(){
+          it.d = !it.d;
+          persistPlan();
+          renderPlan();
+        });
+      }
+      wrap.appendChild(row);
+    });
+
+    var list = $("planList");
+    list.innerHTML = "";
+    plan.cycle.forEach(function(sess, i){
+      var row = document.createElement("div");
+      row.className = "cyc" + (i === plan.idx ? " on" : "");
+      var n = document.createElement("span");
+      n.className = "n"; n.textContent = i + 1;
+      var nm = document.createElement("span");
+      nm.className = "cname"; nm.textContent = sess.name;
+      var mt = document.createElement("span");
+      mt.className = "cmeta"; mt.textContent = sess.act + " · " + sess.mins + " 分钟";
+      row.appendChild(n); row.appendChild(nm); row.appendChild(mt);
+      row.addEventListener("click", function(){
+        plan.idx = i; persistPlan(); renderPlan();
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
+      list.appendChild(row);
+    });
+
+    $("planWhy").innerHTML = PLAN_WHY;
+  }
+
+  function advancePlan(step){
+    var s = currentSession();
+    s.items.forEach(function(i){ i.d = false; });
+    plan.idx = (plan.idx + (step || 1) + plan.cycle.length) % plan.cycle.length;
+    persistPlan();
+    renderPlan();
+  }
+
+  function startLogFromPlan(){
+    var s = currentSession();
+    sel.date = todayStr(0);
+    $("date").value = sel.date;
+    paintDays();
+    sel.act = s.act; paint($("acts"), sel.act);
+    sel.part = s.tag; paint($("parts"), sel.part);
+    if(MINS.indexOf(s.mins) !== -1){
+      sel.mins = s.mins; paint($("mins"), sel.mins); $("minsCustom").value = "";
+    }else{
+      sel.mins = 0; paint($("mins"), "");
+      $("minsCustom").value = s.mins;
+    }
+    refreshSave();
+    planPending = true;
+    switchTab("move");
+    toast("确认一下项目和时长，点保存");
   }
 
   /* ---------- 卡路里估算 ---------- */
@@ -802,6 +1058,10 @@
         celebrate(before < goal && after >= goal);
       }, 260);
     }
+    if(planPending){
+      planPending = null;
+      advancePlan(1);
+    }
   }
 
   function removeRecord(id){
@@ -899,6 +1159,11 @@
   }
 
   function renderStat(){
+    if(tab === "plan"){
+      var w0 = weekStats();
+      $("stat").innerHTML = "本周 <b>" + w0.count + "</b> / " + goal + " 次";
+      return;
+    }
     if(tab === "food"){
       var t = todayStr(0);
       var todays = photos.filter(function(p){ return p.date === t; })
@@ -1393,9 +1658,10 @@
     Array.prototype.forEach.call(document.querySelectorAll(".tab"), function(b){
       b.classList.toggle("on", b.dataset.tab === name);
     });
+    $("pane-plan").classList.toggle("hidden", name !== "plan");
     $("pane-move").classList.toggle("hidden", name !== "move");
     $("pane-food").classList.toggle("hidden", name !== "food");
-    $("title").textContent = name === "food" ? "吃了什么" : "运动记录";
+    $("title").textContent = name === "food" ? "吃了什么" : (name === "plan" ? "训练计划" : "运动记录");
     if(name === "food" && !meal){
       meal = mealByHour();
       paint($("meals"), meal);
@@ -1414,6 +1680,7 @@
     load();
     loadGoal();
     loadMeals();
+    loadPlan();
     chips($("acts"), ACTS, pickAct);
     chips($("parts"), PARTS, pickPart, "small");
     chips($("mins"), MINS, pickMins, "small");
@@ -1448,6 +1715,34 @@
     $("copy").addEventListener("click", copyOut);
     $("goalMinus").addEventListener("click", function(){ changeGoal(-1); });
     $("goalPlus").addEventListener("click", function(){ changeGoal(1); });
+
+    $("planEdit").addEventListener("click", function(){
+      planEditing = !planEditing;
+      renderPlan();
+    });
+    $("planAdd").addEventListener("click", function(){
+      var s = currentSession();
+      s.items.push({ id: "n" + Date.now(), t: "", d: false });
+      persistPlan(); renderPlan();
+      var inputs = $("planItems").querySelectorAll("input");
+      if(inputs.length) inputs[inputs.length - 1].focus();
+    });
+    $("planDone").addEventListener("click", startLogFromPlan);
+    $("planSkip").addEventListener("click", function(){
+      advancePlan(1);
+      toast("跳过了，下一项是「" + currentSession().name + "」");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+    $("planPrev").addEventListener("click", function(){
+      advancePlan(-1);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+    $("planReset").addEventListener("click", function(){
+      plan = defaultPlan();
+      planEditing = false;
+      persistPlan(); renderPlan();
+      toast("已恢复推荐计划");
+    });
 
     $("camera").addEventListener("change", function(){
       if(this.files && this.files.length) addPhotos(this.files);
@@ -1529,7 +1824,9 @@
 
     render();
     refreshSave();
+    renderPlan();
     renderFood();
+    switchTab("plan");
     refreshPhotos().catch(function(){ toast("这个浏览器不支持存照片"); });
   }
 
