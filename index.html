@@ -236,6 +236,31 @@
   }
   #banner.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
 
+  .kcalRow{display:flex;align-items:center;gap:8px;margin-top:9px;flex-wrap:wrap}
+  .kcalRow input[type=number]{width:104px}
+  .kcalRow .unit{font-size:14px;color:var(--ink-3)}
+  .kcalRow .guess{font-size:12px;color:var(--ink-3);flex:1;min-width:120px;line-height:1.35}
+
+  .mealrow{
+    background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:10px 10px 10px 12px;margin-top:8px;display:flex;gap:9px;align-items:flex-start;
+    position:relative;
+  }
+  .mealrow .bar{position:absolute;left:0;top:9px;bottom:9px;width:3px;border-radius:0 3px 3px 0;background:var(--warm);opacity:.6}
+  .mealrow .mbody{flex:1;min-width:0}
+  .mealrow .mtop{display:flex;align-items:baseline;gap:8px}
+  .mealrow .mtag{font-size:12px;background:var(--warm-soft);color:var(--warm);padding:2px 8px;border-radius:999px;font-weight:600;white-space:nowrap}
+  .mealrow .mkcal{font-size:13px;color:var(--ink-2);margin-left:auto;white-space:nowrap}
+  .mealrow .mtext{font-size:15px;margin-top:5px;word-break:break-word}
+  .mealrow .mtime{font-size:12px;color:var(--ink-3);margin-top:2px}
+
+  .shot .kcal{
+    position:absolute;right:6px;top:6px;background:rgba(28,26,23,.72);color:#fff;
+    font-size:11px;font-weight:600;padding:2px 6px;border-radius:999px;
+  }
+  .dayhead .dk{font-size:13px;color:var(--warm);font-weight:650}
+  .daymeta{font-size:12px;color:var(--ink-3);padding:0 2px 8px}
+
   .empty{
     text-align:center;color:var(--ink-3);font-size:14px;padding:34px 10px;
     background:var(--card);border:1px dashed var(--line);border-radius:var(--radius);
@@ -346,6 +371,21 @@
       <input type="file" id="picker" accept="image/*" multiple hidden>
     </div>
 
+    <div class="card">
+      <p class="label">忘了拍？打字记一条</p>
+      <div class="chips" style="margin-bottom:10px">
+        <button class="chip small" data-mday="0" type="button">今天</button>
+        <button class="chip small" data-mday="1" type="button">昨天</button>
+      </div>
+      <input type="text" id="mealText" maxlength="80" placeholder="比如 一碗牛肉面 加一个鸡蛋">
+      <div class="kcalRow">
+        <input type="number" id="mealKcal" inputmode="numeric" placeholder="—" min="0" max="9000">
+        <span class="unit">大卡</span>
+        <span class="guess" id="mealGuess">估的，可以改</span>
+      </div>
+      <button class="save warm" id="mealSave" type="button">记下来</button>
+    </div>
+
     <div class="listhead">
       <h2 id="foodTitle">最近吃的</h2>
     </div>
@@ -375,6 +415,15 @@
 <dialog id="viewer">
   <img id="vImg" alt="">
   <p class="vmeta" id="vMeta"></p>
+  <input type="text" id="vText" maxlength="80" placeholder="这顿吃了什么，可不填">
+  <div class="kcalRow">
+    <input type="number" id="vKcal" inputmode="numeric" placeholder="—" min="0" max="9000">
+    <span class="unit">大卡</span>
+    <span class="guess" id="vGuess"></span>
+  </div>
+  <div class="drow">
+    <button class="ghost" id="vSave" type="button">保存</button>
+  </div>
   <div class="drow">
     <button class="ghost" id="vShare" type="button">分享 / 存到相册</button>
     <button class="ghost" id="vDelete" type="button">删除</button>
@@ -388,6 +437,7 @@
 
   var KEY = "yundong-jilu-v1";
   var GOAL_KEY = "yundong-goal";
+  var MEAL_KEY = "yundong-meals";
   var ACTS = ["跑步","网球","游泳","Tone House","HYROX","健身房"];
   var PARTS = ["腿","背","肩","胸","手臂","核心","全身","不适用"];
   var MINS = [30,45,60,75,90];
@@ -400,7 +450,9 @@
   var lastFilled = -1;
   var sel = { date:"", act:"", part:"", mins:0 };
   var meal = "";
-  var photos = [];          // {id,date,meal,ts,type,size,blob}
+  var mealDate = "";
+  var meals = [];           // {id,date,meal,ts,text,kcal}
+  var photos = [];          // {id,date,meal,ts,type,size,blob,text,kcal}
   var urls = {};            // id -> objectURL
   var viewing = null;
   var tab = "move";
@@ -428,6 +480,143 @@
   }
   function saveGoal(){
     try{ localStorage.setItem(GOAL_KEY, String(goal)); }catch(e){}
+  }
+  function loadMeals(){
+    try{
+      var raw = localStorage.getItem(MEAL_KEY);
+      meals = raw ? JSON.parse(raw) : [];
+      if(!Array.isArray(meals)) meals = [];
+    }catch(e){ meals = []; }
+  }
+  function persistMeals(){
+    try{ localStorage.setItem(MEAL_KEY, JSON.stringify(meals)); }catch(e){}
+  }
+
+  /* ---------- 卡路里估算 ---------- */
+
+  var FOOD = [
+    ["米饭|白饭|rice", 200], ["糙米饭", 200], ["粥|congee|porridge", 120],
+    ["牛肉面", 550], ["拉面|ramen", 650], ["炒面", 550], ["面条|noodle|noodles", 300],
+    ["意面|意大利面|pasta|spaghetti", 500], ["炒饭|fried rice", 600],
+    ["饺子|dumpling|dumplings", 400], ["小笼包", 350], ["包子", 250], ["馒头", 220],
+    ["吐司|toast", 90], ["面包|bread", 90], ["三明治|sandwich", 400],
+    ["汉堡|burger|hamburger", 550], ["披萨|比萨|pizza", 285],
+    ["卷饼|burrito", 700], ["寿司|sushi", 350], ["米粉", 350], ["河粉", 400],
+    ["年糕", 300], ["薯条|fries", 340], ["土豆|potato", 160], ["玉米|corn", 130],
+    ["红薯|地瓜", 130], ["燕麦|oatmeal|oats", 150], ["麦片|cereal", 200],
+    ["贝果|bagel", 280], ["可颂|牛角包|croissant", 270],
+    ["潜艇堡|subway", 500], ["poke|沙拉碗", 550], ["麻辣烫", 600], ["火锅|hotpot", 900],
+    ["烧烤|bbq", 700], ["咖喱|curry", 650], ["拌饭|bibimbap", 600],
+    ["越南粉|pho", 450], ["泰式炒河粉|pad thai|padthai", 700],
+
+    ["鸡蛋|egg|eggs|水煮蛋", 78], ["煎蛋", 110], ["炒蛋|scrambled", 180],
+    ["鸡胸|chicken breast", 165], ["鸡腿", 200], ["炸鸡|fried chicken", 320],
+    ["鸡翅|wings", 250], ["鸡肉|chicken", 200],
+    ["牛排|steak", 400], ["牛肉|beef", 250], ["排骨|ribs", 350], ["猪肉|pork", 250],
+    ["培根|bacon", 45], ["香肠|sausage", 200],
+    ["三文鱼|salmon", 230], ["金枪鱼|tuna", 130], ["虾|shrimp", 100], ["鱼|fish", 180],
+    ["豆腐|tofu", 120], ["蛋白粉|protein powder|蛋白奶昔", 120],
+
+    ["凯撒沙拉|caesar", 350], ["沙拉|salad", 150],
+    ["西兰花|broccoli", 55], ["蔬菜|青菜|veggies|vegetable", 60],
+    ["牛油果|avocado", 240], ["番茄|西红柿|tomato", 25], ["黄瓜|cucumber", 15],
+
+    ["希腊酸奶|greek yogurt", 150], ["酸奶|yogurt", 120],
+    ["脱脂奶|skim milk", 80], ["牛奶|milk", 120], ["豆浆|soy milk", 80],
+    ["芝士|奶酪|cheese", 70], ["黄油|butter", 100],
+
+    ["苹果|apple", 95], ["香蕉|banana", 105], ["橙子|orange", 62],
+    ["葡萄|grapes", 100], ["西瓜|watermelon", 85], ["草莓|strawberry|strawberries", 50],
+    ["蓝莓|blueberry|blueberries", 85], ["芒果|mango", 200], ["梨|pear", 100],
+
+    ["美式|americano", 15], ["拿铁|latte", 190], ["卡布奇诺|cappuccino", 120],
+    ["咖啡|coffee", 5], ["奶茶|milk tea|boba|珍珠奶茶", 350],
+    ["可乐|coke|cola", 140], ["果汁|juice", 120], ["气泡水|sparkling water", 0],
+    ["啤酒|beer", 150], ["红酒|wine", 125], ["鸡尾酒|cocktail", 250],
+    ["运动饮料|gatorade", 80], ["奶昔|smoothie|shake", 250],
+
+    ["薯片|chips", 160], ["巧克力|chocolate", 230], ["饼干|cookie|biscuit", 80],
+    ["蛋糕|cake", 350], ["冰淇淋|冰激凌|ice cream", 250], ["坚果|nuts|杏仁|almond", 180],
+    ["花生|peanut", 170], ["蛋白棒|能量棒|protein bar", 200], ["布丁|pudding", 150],
+    ["甜甜圈|donut|doughnut", 250], ["月饼", 400], ["爆米花|popcorn", 120]
+  ];
+
+  var FOOD_INDEX = (function(){
+    var out = [];
+    FOOD.forEach(function(row){
+      var kws = row[0].split("|");
+      var name = kws[0];
+      kws.forEach(function(k){ out.push({ k: k.toLowerCase(), kcal: row[1], name: name }); });
+    });
+    out.sort(function(a,b){ return b.k.length - a.k.length; });
+    return out;
+  })();
+
+  var CN_NUM = { "一":1,"两":2,"二":2,"三":3,"四":4,"五":5,"六":6,"七":7,"八":8,"九":9,"十":10,"半":0.5 };
+  // 一份里有很多个的东西，按「个」数时用单个热量
+  var PER_PIECE = { "饺子":40, "小笼包":60, "鸡翅":85, "饼干":40, "草莓":6, "蓝莓":1 };
+
+  // 只看紧挨着关键词前面的几个字，且数字必须贴着关键词（中间最多一个量词）
+  function readBefore(text, idx, taken){
+    var start = Math.max(0, idx - 4);
+    for(var i = idx - 1; i >= start; i--){
+      if(taken[i]){ start = i + 1; break; }
+    }
+    var win = text.slice(start, idx);
+    var q = 1, unit = "";
+    var m = win.match(/(\d+(?:\.\d+)?|[一二两三四五六七八九十半])\s*([个只颗粒碗份杯块片盘条根袋瓶罐])?\s*$/);
+    if(m){
+      var n = /^\d/.test(m[1]) ? parseFloat(m[1]) : CN_NUM[m[1]];
+      if(n > 0 && n <= 30) q = n;
+      unit = m[2] || "";
+    }
+    var size = 1;
+    if(/大碗|大份|大杯|加大|超大/.test(win)) size = 1.3;
+    else if(/小碗|小份|小杯/.test(win)) size = 0.75;
+    return { q: q, unit: unit, size: size };
+  }
+
+  function estimate(text){
+    if(!text) return { kcal:0, parts:[] };
+    var low = text.toLowerCase();
+    var taken = new Array(low.length).fill(false);
+    var found = [];
+
+    FOOD_INDEX.forEach(function(item){
+      var from = 0, idx;
+      while((idx = low.indexOf(item.k, from)) !== -1){
+        var end = idx + item.k.length;
+        var clash = false;
+        for(var i = idx; i < end; i++){ if(taken[i]){ clash = true; break; } }
+        if(!clash){
+          for(var j = idx; j < end; j++) taken[j] = true;
+          found.push({ item: item, idx: idx });
+        }
+        from = end;
+      }
+    });
+
+    found.sort(function(a,b){ return a.idx - b.idx; });
+
+    var parts = [], total = 0;
+    found.forEach(function(f){
+      var info = readBefore(low, f.idx, taken);
+      var base = f.item.kcal;
+      var piece = PER_PIECE[f.item.name] !== undefined ? PER_PIECE[f.item.name] : null;
+      if(piece !== null && /[个只颗粒]/.test(info.unit)) base = piece;
+      var kcal = Math.round(base * info.q * info.size);
+      total += kcal;
+      parts.push({ name: f.item.name, q: info.q, kcal: kcal });
+    });
+
+    return { kcal: Math.round(total), parts: parts };
+  }
+
+  function guessText(res){
+    if(!res.parts.length) return "没认出来，自己填一个";
+    return "估算：" + res.parts.map(function(p){
+      return p.name + (p.q !== 1 ? " ×" + p.q : "") + " " + p.kcal;
+    }).join(" + ") + "，可以改";
   }
 
   /* ---------- 照片：IndexedDB ---------- */
@@ -712,8 +901,13 @@
   function renderStat(){
     if(tab === "food"){
       var t = todayStr(0);
-      var n = photos.filter(function(p){ return p.date === t; }).length;
-      $("stat").innerHTML = n ? "今天 <b>" + n + "</b> 张" : "今天还没拍";
+      var todays = photos.filter(function(p){ return p.date === t; })
+        .concat(meals.filter(function(m){ return m.date === t; }));
+      if(!todays.length){ $("stat").textContent = "今天还没记"; return; }
+      var k = dayKcal(todays);
+      $("stat").innerHTML = k.sum
+        ? "今天 <b>" + todays.length + "</b> 条 · 约 <b>" + k.sum + "</b> 大卡"
+        : "今天 <b>" + todays.length + "</b> 条";
       return;
     }
     var w = weekStats();
@@ -959,43 +1153,73 @@
     return urls[p.id];
   }
 
+  function dayKcal(items){
+    var sum = 0, missing = 0;
+    items.forEach(function(it){
+      var k = Number(it.kcal) || 0;
+      if(k > 0) sum += k; else missing++;
+    });
+    return { sum: sum, missing: missing };
+  }
+
   function renderFood(){
     var wrap = $("foodList");
     wrap.innerHTML = "";
 
-    if(!photos.length){
+    var byDate = {}, order = [];
+    function bucket(item){
+      if(!byDate[item.date]){ byDate[item.date] = { photos: [], meals: [] }; order.push(item.date); }
+      return byDate[item.date];
+    }
+    photos.forEach(function(p){ bucket(p).photos.push(p); });
+    meals.forEach(function(m){ bucket(m).meals.push(m); });
+    order.sort(function(a,b){ return a < b ? 1 : -1; });
+
+    var totalItems = photos.length + meals.length;
+
+    if(!totalItems){
       var e = document.createElement("div");
       e.className = "empty";
-      e.textContent = "还没有照片，吃之前拍一张就行";
+      e.textContent = "还没有记录，拍一张或者打字记一条";
       wrap.appendChild(e);
-    }else{
-      var byDate = {};
-      var order = [];
-      photos.forEach(function(p){
-        if(!byDate[p.date]){ byDate[p.date] = []; order.push(p.date); }
-        byDate[p.date].push(p);
-      });
+    }
 
-      order.forEach(function(date){
-        var g = document.createElement("div");
-        g.className = "daygroup";
+    order.forEach(function(date){
+      var day = byDate[date];
+      day.meals.sort(function(a,b){ return b.ts - a.ts; });
+      var all = day.photos.concat(day.meals);
+      var k = dayKcal(all);
 
-        var head = document.createElement("div");
-        head.className = "dayhead";
-        var d = document.createElement("span");
-        d.className = "d";
-        var rel = relLabel(date);
-        d.textContent = fmtDate(date) + (rel ? "  " + rel : "") + "  ·  " + byDate[date].length + " 张";
-        head.appendChild(d);
+      var g = document.createElement("div");
+      g.className = "daygroup";
 
-        var sh = document.createElement("button");
-        sh.className = "ghost"; sh.type = "button"; sh.textContent = "分享这天";
-        sh.addEventListener("click", function(){ sharePhotos(byDate[date], fmtDate(date)); });
-        head.appendChild(sh);
+      var head = document.createElement("div");
+      head.className = "dayhead";
+      var d = document.createElement("span");
+      d.className = "d";
+      var rel = relLabel(date);
+      d.textContent = fmtDate(date) + (rel ? "  " + rel : "");
+      head.appendChild(d);
 
+      var right = document.createElement("span");
+      right.className = "dk";
+      right.textContent = k.sum ? "约 " + k.sum + " 大卡" : "";
+      head.appendChild(right);
+      g.appendChild(head);
+
+      var meta = document.createElement("div");
+      meta.className = "daymeta";
+      var bits = [];
+      if(day.photos.length) bits.push(day.photos.length + " 张照片");
+      if(day.meals.length) bits.push(day.meals.length + " 条手写");
+      if(k.missing) bits.push(k.missing + " 项没填卡路里");
+      meta.textContent = bits.join(" · ");
+      g.appendChild(meta);
+
+      if(day.photos.length){
         var grid = document.createElement("div");
         grid.className = "grid";
-        byDate[date].forEach(function(p){
+        day.photos.forEach(function(p){
           var cell = document.createElement("div");
           cell.className = "shot";
           var im = document.createElement("img");
@@ -1007,25 +1231,107 @@
           tag.textContent = p.meal + " " + fmtTime(p.ts);
           cell.appendChild(im);
           cell.appendChild(tag);
+          if(Number(p.kcal) > 0){
+            var kb = document.createElement("span");
+            kb.className = "kcal";
+            kb.textContent = p.kcal;
+            cell.appendChild(kb);
+          }
           cell.addEventListener("click", function(){ openViewer(p); });
           grid.appendChild(cell);
         });
-
-        g.appendChild(head);
         g.appendChild(grid);
-        wrap.appendChild(g);
-      });
-    }
 
-    $("foodTitle").textContent = "最近吃的" + (photos.length ? "（" + photos.length + " 张）" : "");
+        var sh = document.createElement("button");
+        sh.className = "ghost";
+        sh.type = "button";
+        sh.textContent = "分享这天的照片";
+        sh.style.marginTop = "9px";
+        sh.addEventListener("click", function(){ sharePhotos(day.photos, fmtDate(date)); });
+        g.appendChild(sh);
+      }
+
+      day.meals.forEach(function(m){
+        var row = document.createElement("div");
+        row.className = "mealrow";
+
+        var bar = document.createElement("div");
+        bar.className = "bar";
+
+        var body = document.createElement("div");
+        body.className = "mbody";
+
+        var top = document.createElement("div");
+        top.className = "mtop";
+        var tag = document.createElement("span");
+        tag.className = "mtag"; tag.textContent = m.meal;
+        top.appendChild(tag);
+        var kc = document.createElement("span");
+        kc.className = "mkcal";
+        kc.textContent = Number(m.kcal) > 0 ? m.kcal + " 大卡" : "没填";
+        top.appendChild(kc);
+
+        var txt = document.createElement("div");
+        txt.className = "mtext"; txt.textContent = m.text;
+
+        var tm = document.createElement("div");
+        tm.className = "mtime"; tm.textContent = fmtTime(m.ts);
+
+        body.appendChild(top);
+        body.appendChild(txt);
+        body.appendChild(tm);
+
+        var del = document.createElement("button");
+        del.className = "del"; del.type = "button";
+        del.setAttribute("aria-label","删除");
+        del.textContent = "×";
+        del.addEventListener("click", function(){
+          meals = meals.filter(function(x){ return x.id !== m.id; });
+          persistMeals();
+          renderFood();
+          toast("已删除");
+        });
+
+        row.appendChild(bar);
+        row.appendChild(body);
+        row.appendChild(del);
+        g.appendChild(row);
+      });
+
+      wrap.appendChild(g);
+    });
+
+    $("foodTitle").textContent = "最近吃的" + (totalItems ? "（" + totalItems + " 条）" : "");
     var bytes = photos.reduce(function(s,p){ return s + (p.size || 0); }, 0);
     var sizeTxt = bytes >= 1048576
       ? (bytes/1048576).toFixed(1) + " MB"
       : Math.max(1, Math.round(bytes/1024)) + " KB";
     $("usage").textContent = photos.length
-      ? "共 " + photos.length + " 张，约 " + sizeTxt
+      ? "共 " + photos.length + " 张照片，约 " + sizeTxt
       : "";
     renderStat();
+  }
+
+  function addMeal(){
+    var text = $("mealText").value.trim();
+    if(!text) return toast("先写一下吃了什么");
+    var kcal = parseInt($("mealKcal").value, 10);
+    if(!(kcal > 0)) kcal = estimate(text).kcal;
+    meals.push({
+      id: String(Date.now()) + Math.random().toString(16).slice(2,6),
+      date: mealDate || todayStr(0),
+      meal: meal || mealByHour(),
+      ts: Date.now(),
+      text: text,
+      kcal: kcal > 0 ? kcal : 0
+    });
+    persistMeals();
+    $("mealText").value = "";
+    $("mealKcal").value = "";
+    $("mealGuess").textContent = "估的，可以改";
+    renderFood();
+    toast(kcal > 0 ? "已记下，约 " + kcal + " 大卡" : "已记下");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function fileName(p){
@@ -1060,7 +1366,24 @@
     $("vImg").src = urlFor(p);
     var rel = relLabel(p.date);
     $("vMeta").textContent = fmtDate(p.date) + (rel ? "  " + rel : "") + "  ·  " + p.meal + "  ·  " + fmtTime(p.ts);
+    $("vText").value = p.text || "";
+    $("vKcal").value = Number(p.kcal) > 0 ? p.kcal : "";
+    $("vGuess").textContent = p.text ? "" : "写一下吃了什么，会自动估一个数";
     $("viewer").showModal();
+  }
+
+  function saveViewer(){
+    if(!viewing) return;
+    var text = $("vText").value.trim();
+    var kcal = parseInt($("vKcal").value, 10);
+    if(!(kcal > 0) && text) kcal = estimate(text).kcal;
+    viewing.text = text;
+    viewing.kcal = kcal > 0 ? kcal : 0;
+    var rec = viewing;
+    dbPut(rec).then(refreshPhotos).then(function(){
+      $("viewer").close();
+      toast(rec.kcal > 0 ? "已保存，约 " + rec.kcal + " 大卡" : "已保存");
+    });
   }
 
   /* ---------- 初始化 ---------- */
@@ -1081,9 +1404,16 @@
     window.scrollTo({ top: 0 });
   }
 
+  function paintMealDays(){
+    Array.prototype.forEach.call(document.querySelectorAll("[data-mday]"), function(b){
+      b.classList.toggle("on", todayStr(Number(b.dataset.mday)) === mealDate);
+    });
+  }
+
   function init(){
     load();
     loadGoal();
+    loadMeals();
     chips($("acts"), ACTS, pickAct);
     chips($("parts"), PARTS, pickPart, "small");
     chips($("mins"), MINS, pickMins, "small");
@@ -1096,6 +1426,8 @@
     paintDays();
     meal = mealByHour();
     paint($("meals"), meal);
+    mealDate = todayStr(0);
+    paintMealDays();
 
     $("date").addEventListener("change", function(){
       sel.date = this.value;
@@ -1125,6 +1457,38 @@
       if(this.files && this.files.length) addPhotos(this.files);
       this.value = "";
     });
+    $("mealText").addEventListener("input", function(){
+      var res = estimate(this.value.trim());
+      $("mealGuess").textContent = this.value.trim() ? guessText(res) : "估的，可以改";
+      if(!$("mealKcal").dataset.touched) $("mealKcal").value = res.kcal > 0 ? res.kcal : "";
+    });
+    $("mealKcal").addEventListener("input", function(){
+      this.dataset.touched = this.value ? "1" : "";
+    });
+    $("mealSave").addEventListener("click", function(){
+      addMeal();
+      $("mealKcal").dataset.touched = "";
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("[data-mday]"), function(b){
+      b.addEventListener("click", function(){
+        mealDate = todayStr(Number(b.dataset.mday));
+        paintMealDays();
+      });
+    });
+
+    $("vText").addEventListener("input", function(){
+      var res = estimate(this.value.trim());
+      $("vGuess").textContent = this.value.trim() ? guessText(res) : "";
+      if(!$("vKcal").dataset.touched) $("vKcal").value = res.kcal > 0 ? res.kcal : "";
+    });
+    $("vKcal").addEventListener("input", function(){
+      this.dataset.touched = this.value ? "1" : "";
+    });
+    $("vSave").addEventListener("click", function(){
+      saveViewer();
+      $("vKcal").dataset.touched = "";
+    });
+
     $("vShare").addEventListener("click", function(){
       if(viewing) sharePhotos([viewing], "吃的记录");
     });
@@ -1139,23 +1503,33 @@
     $("vClose").addEventListener("click", function(){ $("viewer").close(); });
 
     $("backup").addEventListener("click", function(){
-      $("dlgText").value = JSON.stringify(records);
+      $("dlgText").value = JSON.stringify({ v:2, records: records, meals: meals, goal: goal });
       $("dlg").showModal();
     });
     $("dlgClose").addEventListener("click", function(){ $("dlg").close(); });
     $("dlgRestore").addEventListener("click", function(){
       try{
         var data = JSON.parse($("dlgText").value);
-        if(!Array.isArray(data)) throw new Error("bad");
-        records = data;
-        persist(); render();
+        var n = 0;
+        if(Array.isArray(data)){
+          records = data; n = data.length;
+        }else if(data && Array.isArray(data.records)){
+          records = data.records;
+          meals = Array.isArray(data.meals) ? data.meals : [];
+          if(data.goal >= 1 && data.goal <= 14){ goal = data.goal; saveGoal(); }
+          n = records.length + meals.length;
+        }else{
+          throw new Error("bad");
+        }
+        persist(); persistMeals(); render(); renderFood();
         $("dlg").close();
-        toast("已恢复 " + data.length + " 条");
+        toast("已恢复 " + n + " 条");
       }catch(e){ toast("格式不对，检查一下"); }
     });
 
     render();
     refreshSave();
+    renderFood();
     refreshPhotos().catch(function(){ toast("这个浏览器不支持存照片"); });
   }
 
