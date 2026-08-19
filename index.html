@@ -22,6 +22,8 @@
     --line:#e7e2db;
     --accent:#2f6f5e;
     --accent-soft:#e4efe9;
+    --warm:#b5762f;
+    --warm-soft:#f6ece0;
     --danger:#b4413a;
     --radius:14px;
   }
@@ -42,12 +44,21 @@
   .wrap{max-width:520px;margin:0 auto;padding:0 14px}
 
   header{
-    padding:18px 0 12px;
+    padding:18px 0 10px;
     display:flex;align-items:baseline;justify-content:space-between;gap:10px;
   }
   header h1{font-size:20px;margin:0;letter-spacing:.5px;font-weight:650}
   .stat{font-size:13px;color:var(--ink-2);text-align:right;white-space:nowrap}
   .stat b{color:var(--accent);font-weight:650}
+
+  .tabs{
+    display:flex;gap:4px;background:#ece8e2;border-radius:11px;padding:3px;margin-bottom:14px;
+  }
+  .tab{
+    flex:1;appearance:none;border:none;background:none;font-family:inherit;font-size:15px;
+    color:var(--ink-2);padding:9px 0;border-radius:9px;cursor:pointer;font-weight:600;
+  }
+  .tab.on{background:#fff;color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.06)}
 
   .card{
     background:var(--card);
@@ -89,6 +100,7 @@
     font-weight:600;
   }
   .chip.small{font-size:14px;padding:8px 12px;min-height:38px}
+  #meals .chip.on{background:var(--warm);border-color:var(--warm)}
 
   input[type=date],input[type=text],input[type=number]{
     width:100%;
@@ -106,7 +118,7 @@
   .inline input[type=number]{width:96px}
 
   .save{
-    width:100%;
+    display:block;width:100%;text-align:center;
     margin-top:16px;
     background:var(--accent);
     color:#fff;
@@ -122,11 +134,17 @@
   }
   .save:active{opacity:.85}
   .save:disabled{background:#cfcac4;color:#fff}
+  .save.warm{background:var(--warm)}
+  .save.sub{
+    background:#fff;color:var(--ink-2);border:1px solid var(--line);
+    font-size:15px;font-weight:600;padding:12px;min-height:46px;margin-top:8px;
+  }
 
   .toast{
     position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(10px);
     background:var(--ink);color:#fff;font-size:14px;padding:10px 18px;border-radius:999px;
-    opacity:0;pointer-events:none;transition:opacity .18s ease,transform .18s ease;z-index:50;
+    opacity:0;pointer-events:none;transition:opacity .18s ease,transform .18s ease;z-index:60;
+    max-width:86%;text-align:center;
   }
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
@@ -170,87 +188,152 @@
   }
   .del:active{color:var(--danger)}
 
+  .daygroup{margin-bottom:16px}
+  .dayhead{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 2px 8px;
+  }
+  .dayhead .d{font-size:13px;color:var(--ink-2);font-weight:600}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .shot{
+    position:relative;aspect-ratio:1;border-radius:12px;overflow:hidden;
+    background:#ece8e2;border:1px solid var(--line);cursor:pointer;
+  }
+  .shot img{width:100%;height:100%;object-fit:cover;display:block}
+  .shot .tag{
+    position:absolute;left:6px;bottom:6px;
+    background:rgba(28,26,23,.72);color:#fff;font-size:11px;font-weight:600;
+    padding:2px 7px;border-radius:999px;backdrop-filter:blur(4px);
+  }
+
   .empty{
     text-align:center;color:var(--ink-3);font-size:14px;padding:34px 10px;
     background:var(--card);border:1px dashed var(--line);border-radius:var(--radius);
   }
-  .foot{text-align:center;color:var(--ink-3);font-size:12px;padding:18px 0 6px}
+  .foot{text-align:center;color:var(--ink-3);font-size:12px;padding:18px 0 6px;line-height:1.8}
   .foot button{background:none;border:none;color:var(--ink-3);font-size:12px;text-decoration:underline;font-family:inherit;cursor:pointer}
+
   dialog{border:none;border-radius:14px;padding:16px;max-width:440px;width:92%;background:var(--card);color:var(--ink);font-family:inherit}
   dialog::backdrop{background:rgba(28,26,23,.45)}
   dialog textarea{width:100%;height:150px;font-family:ui-monospace,Menlo,monospace;font-size:12px;border:1px solid var(--line);border-radius:10px;padding:10px;background:#fbfaf8;color:var(--ink)}
-  dialog .drow{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}
+  dialog .drow{display:flex;gap:8px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap}
+  #viewer img{width:100%;border-radius:10px;display:block;margin-bottom:10px}
+  #viewer .vmeta{font-size:13px;color:var(--ink-2);margin:0 0 10px}
+  .hidden{display:none !important}
 </style>
 </head>
 <body>
 <div class="wrap">
 
   <header>
-    <h1>运动记录</h1>
+    <h1 id="title">运动记录</h1>
     <div class="stat" id="stat"></div>
   </header>
 
-  <div class="card">
-    <div class="row">
-      <p class="label">日期</p>
-      <div class="chips" style="margin-bottom:8px">
-        <button class="chip small" data-day="0" type="button">今天</button>
-        <button class="chip small" data-day="1" type="button">昨天</button>
-        <button class="chip small" data-day="2" type="button">前天</button>
+  <div class="tabs">
+    <button class="tab on" data-tab="move" type="button">运动</button>
+    <button class="tab" data-tab="food" type="button">吃的</button>
+  </div>
+
+  <!-- 运动 -->
+  <section id="pane-move">
+    <div class="card">
+      <div class="row">
+        <p class="label">日期</p>
+        <div class="chips" style="margin-bottom:8px">
+          <button class="chip small" data-day="0" type="button">今天</button>
+          <button class="chip small" data-day="1" type="button">昨天</button>
+          <button class="chip small" data-day="2" type="button">前天</button>
+        </div>
+        <input type="date" id="date">
       </div>
-      <input type="date" id="date">
+
+      <div class="row">
+        <p class="label">做了什么</p>
+        <div class="chips" id="acts"></div>
+      </div>
+
+      <div class="row">
+        <p class="label">练了哪个部位</p>
+        <div class="chips" id="parts"></div>
+      </div>
+
+      <div class="row">
+        <p class="label">时长</p>
+        <div class="chips" id="mins" style="margin-bottom:8px"></div>
+        <div class="inline">
+          <input type="number" id="minsCustom" inputmode="numeric" placeholder="其他" min="1" max="600">
+          <span style="color:var(--ink-3);font-size:14px">分钟</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <p class="label">备注 <span class="hint">可不填</span></p>
+        <input type="text" id="note" maxlength="60" placeholder="比如 腿很累 / 臀推加了重量">
+      </div>
+
+      <button class="save" id="save" type="button">保存</button>
     </div>
 
-    <div class="row">
-      <p class="label">做了什么</p>
-      <div class="chips" id="acts"></div>
-    </div>
-
-    <div class="row">
-      <p class="label">练了哪个部位</p>
-      <div class="chips" id="parts"></div>
-    </div>
-
-    <div class="row">
-      <p class="label">时长</p>
-      <div class="chips" id="mins" style="margin-bottom:8px"></div>
-      <div class="inline">
-        <input type="number" id="minsCustom" inputmode="numeric" placeholder="其他" min="1" max="600">
-        <span style="color:var(--ink-3);font-size:14px">分钟</span>
+    <div class="listhead">
+      <h2 id="listTitle">最近记录</h2>
+      <div class="acts">
+        <button class="ghost" id="copy" type="button">一键复制</button>
       </div>
     </div>
 
-    <div class="row">
-      <p class="label">备注 <span class="hint">可不填</span></p>
-      <input type="text" id="note" maxlength="60" placeholder="比如 腿很累 / 臀推加了重量">
+    <div id="list"></div>
+
+    <div class="foot">
+      数据只存在这台手机上 ·
+      <button id="backup" type="button">备份 / 恢复</button>
+    </div>
+  </section>
+
+  <!-- 吃的 -->
+  <section id="pane-food" class="hidden">
+    <div class="card">
+      <div class="row">
+        <p class="label">哪一餐 <span class="hint">按时间自动选好了</span></p>
+        <div class="chips" id="meals"></div>
+      </div>
+      <label class="save warm" for="camera">拍照</label>
+      <input type="file" id="camera" accept="image/*" capture="environment" hidden>
+      <label class="save sub" for="picker">从相册选</label>
+      <input type="file" id="picker" accept="image/*" multiple hidden>
     </div>
 
-    <button class="save" id="save" type="button">保存</button>
-  </div>
-
-  <div class="listhead">
-    <h2 id="listTitle">最近记录</h2>
-    <div class="acts">
-      <button class="ghost" id="copy" type="button">一键复制</button>
+    <div class="listhead">
+      <h2 id="foodTitle">最近吃的</h2>
     </div>
-  </div>
 
-  <div id="list"></div>
+    <div id="foodList"></div>
 
-  <div class="foot">
-    数据只存在这台手机上 ·
-    <button id="backup" type="button">备份 / 恢复</button>
-  </div>
+    <div class="foot">
+      照片只存在这台手机上，没有上传到任何地方<br>
+      <span id="usage"></span>
+    </div>
+  </section>
 </div>
 
 <div class="toast" id="toast"></div>
 
 <dialog id="dlg">
-  <p style="margin:0 0 8px;font-size:14px;color:var(--ink-2)">下面是全部数据。换手机时复制这段文字，在新手机里粘贴进来再点恢复。</p>
+  <p style="margin:0 0 8px;font-size:14px;color:var(--ink-2)">下面是运动记录的全部数据。换手机时复制这段文字，在新手机里粘贴进来再点恢复。照片体积大，不在这里面，换手机前先用「分享今天」把照片存到相册。</p>
   <textarea id="dlgText" spellcheck="false"></textarea>
   <div class="drow">
     <button class="ghost" id="dlgRestore" type="button">粘贴后恢复</button>
     <button class="ghost" id="dlgClose" type="button">关闭</button>
+  </div>
+</dialog>
+
+<dialog id="viewer">
+  <img id="vImg" alt="">
+  <p class="vmeta" id="vMeta"></p>
+  <div class="drow">
+    <button class="ghost" id="vShare" type="button">分享 / 存到相册</button>
+    <button class="ghost" id="vDelete" type="button">删除</button>
+    <button class="ghost" id="vClose" type="button">关闭</button>
   </div>
 </dialog>
 
@@ -262,26 +345,87 @@
   var ACTS = ["跑步","网球","游泳","Tone House","HYROX","健身房"];
   var PARTS = ["腿","背","肩","胸","手臂","核心","全身","不适用"];
   var MINS = [30,45,60,75,90];
+  var MEALS = ["早餐","午餐","晚餐","加餐"];
   var AUTO = {"跑步":"全身","游泳":"全身","网球":"全身","Tone House":"全身","HYROX":"全身"};
   var WEEK = ["周日","周一","周二","周三","周四","周五","周六"];
 
   var records = [];
   var sel = { date:"", act:"", part:"", mins:0 };
-  var memoryOnly = false;
+  var meal = "";
+  var photos = [];          // {id,date,meal,ts,type,size,blob}
+  var urls = {};            // id -> objectURL
+  var viewing = null;
+  var tab = "move";
 
   function $(id){ return document.getElementById(id); }
+
+  /* ---------- 运动记录：localStorage ---------- */
 
   function load(){
     try{
       var raw = localStorage.getItem(KEY);
       records = raw ? JSON.parse(raw) : [];
       if(!Array.isArray(records)) records = [];
-    }catch(e){ records = []; memoryOnly = true; }
+    }catch(e){ records = []; }
   }
-  function save(){
+  function persist(){
     try{ localStorage.setItem(KEY, JSON.stringify(records)); }
-    catch(e){ memoryOnly = true; toast("这个浏览器存不下，先用备份功能"); }
+    catch(e){ toast("这个浏览器存不下，先用备份功能"); }
   }
+
+  /* ---------- 照片：IndexedDB ---------- */
+
+  var DB_NAME = "yundong-photos";
+  var STORE = "photos";
+  var dbp = null;
+
+  function db(){
+    if(dbp) return dbp;
+    dbp = new Promise(function(res, rej){
+      var req = indexedDB.open(DB_NAME, 1);
+      req.onupgradeneeded = function(){
+        var d = req.result;
+        if(!d.objectStoreNames.contains(STORE)){
+          d.createObjectStore(STORE, { keyPath:"id" });
+        }
+      };
+      req.onsuccess = function(){ res(req.result); };
+      req.onerror = function(){ rej(req.error); };
+    });
+    return dbp;
+  }
+  function tx(mode){
+    return db().then(function(d){ return d.transaction(STORE, mode).objectStore(STORE); });
+  }
+  function dbAll(){
+    return tx("readonly").then(function(st){
+      return new Promise(function(res, rej){
+        var r = st.getAll();
+        r.onsuccess = function(){ res(r.result || []); };
+        r.onerror = function(){ rej(r.error); };
+      });
+    });
+  }
+  function dbPut(rec){
+    return tx("readwrite").then(function(st){
+      return new Promise(function(res, rej){
+        var r = st.put(rec);
+        r.onsuccess = function(){ res(); };
+        r.onerror = function(){ rej(r.error); };
+      });
+    });
+  }
+  function dbDel(id){
+    return tx("readwrite").then(function(st){
+      return new Promise(function(res, rej){
+        var r = st.delete(id);
+        r.onsuccess = function(){ res(); };
+        r.onerror = function(){ rej(r.error); };
+      });
+    });
+  }
+
+  /* ---------- 工具 ---------- */
 
   function todayStr(offset){
     var d = new Date();
@@ -302,13 +446,27 @@
     var t = new Date(); t.setHours(0,0,0,0);
     return Math.round((t - d) / 86400000);
   }
-
+  function relLabel(s){
+    var diff = dayDiff(s);
+    return diff === 0 ? "今天" : (diff === 1 ? "昨天" : (diff === 2 ? "前天" : ""));
+  }
+  function fmtTime(ts){
+    var d = new Date(ts);
+    return String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0");
+  }
+  function mealByHour(){
+    var h = new Date().getHours();
+    if(h < 10) return "早餐";
+    if(h < 15) return "午餐";
+    if(h < 21) return "晚餐";
+    return "加餐";
+  }
   function toast(msg){
     var el = $("toast");
     el.textContent = msg;
     el.classList.add("show");
     clearTimeout(el._t);
-    el._t = setTimeout(function(){ el.classList.remove("show"); }, 1600);
+    el._t = setTimeout(function(){ el.classList.remove("show"); }, 1800);
   }
 
   function chips(container, items, onPick, cls){
@@ -328,6 +486,8 @@
       b.classList.toggle("on", String(b.dataset.val) === String(val));
     });
   }
+
+  /* ---------- 运动：交互 ---------- */
 
   function pickAct(v){
     sel.act = (sel.act === v) ? "" : v;
@@ -379,20 +539,21 @@
       mins: m,
       note: $("note").value.trim()
     });
-    save();
+    persist();
+    var justSaved = sel.date;
     render();
     sel.act = ""; sel.part = ""; sel.mins = 0;
     paint($("acts"), ""); paint($("parts"), ""); paint($("mins"), "");
     $("minsCustom").value = "";
     $("note").value = "";
     refreshSave();
-    toast("已记下 " + fmtDate(records[records.length-1].date));
+    toast("已记下 " + fmtDate(justSaved));
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function removeRecord(id){
     records = records.filter(function(r){ return r.id !== id; });
-    save();
+    persist();
     render();
     toast("已删除");
   }
@@ -441,8 +602,7 @@
 
         var meta = document.createElement("div");
         meta.className = "meta";
-        var diff = dayDiff(r.date);
-        var rel = diff === 0 ? "今天" : (diff === 1 ? "昨天" : (diff === 2 ? "前天" : ""));
+        var rel = relLabel(r.date);
         meta.textContent = fmtDate(r.date) + (rel ? "  " + rel : "");
 
         body.appendChild(top);
@@ -472,6 +632,12 @@
   }
 
   function renderStat(){
+    if(tab === "food"){
+      var t = todayStr(0);
+      var n = photos.filter(function(p){ return p.date === t; }).length;
+      $("stat").innerHTML = n ? "今天 <b>" + n + "</b> 张" : "今天还没拍";
+      return;
+    }
     var now = new Date(); now.setHours(0,0,0,0);
     var dow = now.getDay() === 0 ? 6 : now.getDay() - 1;
     var monday = new Date(now); monday.setDate(now.getDate() - dow);
@@ -522,18 +688,209 @@
     document.body.removeChild(ta);
   }
 
-  function initChips(){
-    chips($("acts"), ACTS, pickAct);
-    chips($("parts"), PARTS, pickPart, "small");
-    chips($("mins"), MINS, pickMins, "small");
+  /* ---------- 吃的：拍照与存储 ---------- */
+
+  function shrink(file){
+    return new Promise(function(res){
+      var url = URL.createObjectURL(file);
+      var img = new Image();
+      img.onload = function(){
+        var MAX = 1280;
+        var w = img.naturalWidth, h = img.naturalHeight;
+        var scale = Math.min(1, MAX / Math.max(w, h));
+        var cw = Math.round(w * scale), ch = Math.round(h * scale);
+        var c = document.createElement("canvas");
+        c.width = cw; c.height = ch;
+        c.getContext("2d").drawImage(img, 0, 0, cw, ch);
+        URL.revokeObjectURL(url);
+        c.toBlob(function(blob){
+          res(blob || file);
+        }, "image/jpeg", 0.78);
+      };
+      img.onerror = function(){ URL.revokeObjectURL(url); res(file); };
+      img.src = url;
+    });
+  }
+
+  function addPhotos(files){
+    var list = Array.prototype.slice.call(files).filter(function(f){
+      return f && f.type && f.type.indexOf("image") === 0;
+    });
+    if(!list.length) return;
+    var m = meal || mealByHour();
+    toast("处理中…");
+    var jobs = list.map(function(f, i){
+      return shrink(f).then(function(blob){
+        var ts = Date.now() + i;
+        return dbPut({
+          id: String(ts) + Math.random().toString(16).slice(2,6),
+          date: todayStr(0),
+          meal: m,
+          ts: ts,
+          type: "image/jpeg",
+          size: blob.size,
+          blob: blob
+        });
+      });
+    });
+    Promise.all(jobs).then(function(){
+      return refreshPhotos();
+    }).then(function(){
+      toast("已存 " + list.length + " 张 · " + m);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }).catch(function(){
+      toast("存照片失败，可能是空间不够");
+    });
+  }
+
+  function refreshPhotos(){
+    return dbAll().then(function(all){
+      photos = all.sort(function(a,b){ return b.ts - a.ts; });
+      renderFood();
+    });
+  }
+
+  function urlFor(p){
+    if(!urls[p.id]) urls[p.id] = URL.createObjectURL(p.blob);
+    return urls[p.id];
+  }
+
+  function renderFood(){
+    var wrap = $("foodList");
+    wrap.innerHTML = "";
+
+    if(!photos.length){
+      var e = document.createElement("div");
+      e.className = "empty";
+      e.textContent = "还没有照片，吃之前拍一张就行";
+      wrap.appendChild(e);
+    }else{
+      var byDate = {};
+      var order = [];
+      photos.forEach(function(p){
+        if(!byDate[p.date]){ byDate[p.date] = []; order.push(p.date); }
+        byDate[p.date].push(p);
+      });
+
+      order.forEach(function(date){
+        var g = document.createElement("div");
+        g.className = "daygroup";
+
+        var head = document.createElement("div");
+        head.className = "dayhead";
+        var d = document.createElement("span");
+        d.className = "d";
+        var rel = relLabel(date);
+        d.textContent = fmtDate(date) + (rel ? "  " + rel : "") + "  ·  " + byDate[date].length + " 张";
+        head.appendChild(d);
+
+        var sh = document.createElement("button");
+        sh.className = "ghost"; sh.type = "button"; sh.textContent = "分享这天";
+        sh.addEventListener("click", function(){ sharePhotos(byDate[date], fmtDate(date)); });
+        head.appendChild(sh);
+
+        var grid = document.createElement("div");
+        grid.className = "grid";
+        byDate[date].forEach(function(p){
+          var cell = document.createElement("div");
+          cell.className = "shot";
+          var im = document.createElement("img");
+          im.loading = "lazy";
+          im.src = urlFor(p);
+          im.alt = p.meal;
+          var tag = document.createElement("span");
+          tag.className = "tag";
+          tag.textContent = p.meal + " " + fmtTime(p.ts);
+          cell.appendChild(im);
+          cell.appendChild(tag);
+          cell.addEventListener("click", function(){ openViewer(p); });
+          grid.appendChild(cell);
+        });
+
+        g.appendChild(head);
+        g.appendChild(grid);
+        wrap.appendChild(g);
+      });
+    }
+
+    $("foodTitle").textContent = "最近吃的" + (photos.length ? "（" + photos.length + " 张）" : "");
+    var bytes = photos.reduce(function(s,p){ return s + (p.size || 0); }, 0);
+    var sizeTxt = bytes >= 1048576
+      ? (bytes/1048576).toFixed(1) + " MB"
+      : Math.max(1, Math.round(bytes/1024)) + " KB";
+    $("usage").textContent = photos.length
+      ? "共 " + photos.length + " 张，约 " + sizeTxt
+      : "";
+    renderStat();
+  }
+
+  function fileName(p){
+    return p.date + "_" + p.meal + "_" + fmtTime(p.ts).replace(":", "") + ".jpg";
+  }
+
+  function sharePhotos(items, title){
+    if(!items || !items.length) return toast("这天还没有照片");
+    var files = items.map(function(p){
+      return new File([p.blob], fileName(p), { type: "image/jpeg" });
+    });
+    if(navigator.canShare && navigator.canShare({ files: files }) && navigator.share){
+      navigator.share({ files: files, title: title || "吃的记录" }).catch(function(){});
+    }else{
+      files.forEach(function(f, i){
+        setTimeout(function(){
+          var a = document.createElement("a");
+          a.href = URL.createObjectURL(f);
+          a.download = f.name;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(function(){ URL.revokeObjectURL(a.href); }, 4000);
+        }, i * 400);
+      });
+      toast("已下载 " + files.length + " 张");
+    }
+  }
+
+  function openViewer(p){
+    viewing = p;
+    $("vImg").src = urlFor(p);
+    var rel = relLabel(p.date);
+    $("vMeta").textContent = fmtDate(p.date) + (rel ? "  " + rel : "") + "  ·  " + p.meal + "  ·  " + fmtTime(p.ts);
+    $("viewer").showModal();
+  }
+
+  /* ---------- 初始化 ---------- */
+
+  function switchTab(name){
+    tab = name;
+    Array.prototype.forEach.call(document.querySelectorAll(".tab"), function(b){
+      b.classList.toggle("on", b.dataset.tab === name);
+    });
+    $("pane-move").classList.toggle("hidden", name !== "move");
+    $("pane-food").classList.toggle("hidden", name !== "food");
+    $("title").textContent = name === "food" ? "吃了什么" : "运动记录";
+    if(name === "food" && !meal){
+      meal = mealByHour();
+      paint($("meals"), meal);
+    }
+    renderStat();
+    window.scrollTo({ top: 0 });
   }
 
   function init(){
     load();
-    initChips();
+    chips($("acts"), ACTS, pickAct);
+    chips($("parts"), PARTS, pickPart, "small");
+    chips($("mins"), MINS, pickMins, "small");
+    chips($("meals"), MEALS, function(v){
+      meal = v; paint($("meals"), meal);
+    });
+
     sel.date = todayStr(0);
     $("date").value = sel.date;
     paintDays();
+    meal = mealByHour();
+    paint($("meals"), meal);
 
     $("date").addEventListener("change", function(){
       sel.date = this.value;
@@ -543,12 +900,36 @@
     Array.prototype.forEach.call(document.querySelectorAll("[data-day]"), function(b){
       b.addEventListener("click", function(){ pickDay(Number(b.dataset.day)); refreshSave(); });
     });
+    Array.prototype.forEach.call(document.querySelectorAll(".tab"), function(b){
+      b.addEventListener("click", function(){ switchTab(b.dataset.tab); });
+    });
     $("minsCustom").addEventListener("input", function(){
       if(this.value){ sel.mins = 0; paint($("mins"), ""); }
       refreshSave();
     });
     $("save").addEventListener("click", addRecord);
     $("copy").addEventListener("click", copyOut);
+
+    $("camera").addEventListener("change", function(){
+      if(this.files && this.files.length) addPhotos(this.files);
+      this.value = "";
+    });
+    $("picker").addEventListener("change", function(){
+      if(this.files && this.files.length) addPhotos(this.files);
+      this.value = "";
+    });
+    $("vShare").addEventListener("click", function(){
+      if(viewing) sharePhotos([viewing], "吃的记录");
+    });
+    $("vDelete").addEventListener("click", function(){
+      if(!viewing) return;
+      var id = viewing.id;
+      if(urls[id]){ URL.revokeObjectURL(urls[id]); delete urls[id]; }
+      viewing = null;
+      $("viewer").close();
+      dbDel(id).then(refreshPhotos).then(function(){ toast("已删除"); });
+    });
+    $("vClose").addEventListener("click", function(){ $("viewer").close(); });
 
     $("backup").addEventListener("click", function(){
       $("dlgText").value = JSON.stringify(records);
@@ -560,7 +941,7 @@
         var data = JSON.parse($("dlgText").value);
         if(!Array.isArray(data)) throw new Error("bad");
         records = data;
-        save(); render();
+        persist(); render();
         $("dlg").close();
         toast("已恢复 " + data.length + " 条");
       }catch(e){ toast("格式不对，检查一下"); }
@@ -568,6 +949,7 @@
 
     render();
     refreshSave();
+    refreshPhotos().catch(function(){ toast("这个浏览器不支持存照片"); });
   }
 
   document.addEventListener("DOMContentLoaded", init);
